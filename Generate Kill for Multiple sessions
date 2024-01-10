@@ -1,0 +1,4 @@
+SELECT 'KILL ' + CAST(session_id as varchar(100)) AS Sessions_to_kill
+FROM sys.dm_exec_requests 
+where session_id in (54,57,58)
+GO

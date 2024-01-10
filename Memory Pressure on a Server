@@ -1,0 +1,41 @@
+Query 1: dm_os_sys_memory
+
+SELECT total_physical_memory_kb/1024 [Total Physical Memory in MB],
+available_physical_memory_kb/1024 [Physical Memory Available in MB],
+system_memory_state_desc
+FROM sys.dm_os_sys_memory;
+
+This query gives us Operating System’s Memory. In my machine, I have lots of physical memory available so the result says Available physical memory is high. 
+This is good for the system and nothing to worry about.
+
+Query 2: dm_os_process_memory
+
+SELECT physical_memory_in_use_kb/1024 [Physical Memory Used in MB],
+process_physical_memory_low [Physical Memory Low],
+process_virtual_memory_low [Virtual Memory Low]
+FROM sys.dm_os_process_memory;
+
+This query gives us the result of the SQL Server process running on the Operating System and also indicates if there is a memory low issue or not. 
+In our case, both the values are zero and that is a good thing. If any of the LOW values is 1, it is a matter of concern and one should start investigating the memory issue.
+
+Query 3: dm_os_sys_info
+
+SELECT committed_kb/1024 [SQL Server Committed Memory in MB],
+committed_target_kb/1024 [SQL Server Target Committed Memory in MB]
+FROM sys.dm_os_sys_info;
+
+This query gives us how much memory has been committed to SQL Server and what is the current projection for the SQL Server target memory commitment. 
+As the target committed memory is less than available memory for us, we are good in this query as well.
+
+If there is a problem –
+The most frequently asked question is what one should do if there is a problem. Well, I wish the answer was as simple as to ask you for increasing the memory. However, if there is a memory issue with your SQL Server configuration, database configuration, or how the query is set up, well, increasing the memory will not help.
+
+If there is a memory problem, there needs to be a proper investigation into your system and we may have to start using other DMV’s as well as memory dump to identify where exactly the memory bottleneck is and how to fix it. I also take the help of the SQL Wait Stats to identify the overall server bottleneck.
+
+Here are three things you can do if you have memory pressure in your SQL Server.
+
+Step 1: Watch SQL Wait Stats for Performance and send the output to me for analysis. (Absolutely free)
+
+Step 2: Fix Your Indexes with Missing Indexes and Unused Indexes script.
+
+Step 3: Deep dive into memory analysis of your SQL Server. Read the memory-related blog posts here.

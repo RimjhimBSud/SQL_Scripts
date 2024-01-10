@@ -1,0 +1,82 @@
+SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+GO
+WITH    BaseRank AS
+(
+    SELECT
+        t.object_id,
+        ROW_NUMBER() OVER(ORDER BY SUM(a.total_pages) * 8) AS RowRank
+    FROM
+        sys.tables t
+    INNER JOIN     
+        --sys.indexes i ON t.OBJECT_ID = i.object_id
+        (
+            SELECT    object_id,
+                    MIN(index_id) AS index_id
+            FROM    sys.indexes
+            GROUP BY object_id
+        ) AS i ON t.OBJECT_ID = i.object_id
+    INNER JOIN
+        sys.partitions p ON i.object_id = p.OBJECT_ID AND i.index_id = p.index_id
+    INNER JOIN
+        sys.allocation_units a ON p.partition_id = a.container_id
+    INNER JOIN
+        sys.schemas s ON t.schema_id = s.schema_id
+    WHERE
+        t.NAME NOT LIKE 'dt%'
+        AND t.is_ms_shipped = 0
+        AND i.OBJECT_ID > 255
+        AND p.data_compression_desc = 'NONE'
+    GROUP BY
+        t.object_id
+),        CMDLineWork AS
+(
+    SELECT    CMDLine,
+            BaseRank,
+            InnerRank,
+            IndexRank
+    FROM    (
+                SELECT    10 AS BaseRank,
+                        0 AS InnerRank,
+                        0 AS IndexRank,
+                        'USE [' + DB_NAME() + '];' AS CMDLine
+                UNION ALL
+                SELECT    20 AS BaseRank,
+                        B.RowRank AS InnerRank,
+                        s2.type as IndexRank,
+                        CASE    WHEN s2.type = 0
+                                THEN 'ALTER TABLE [' + s3.name + '].[' + s1.name + '] REBUILD PARTITION = ALL WITH(DATA_COMPRESSION = PAGE, ONLINE = ON, MAXDOP = 0);'
+                                ELSE 'ALTER INDEX [' + s2.name + '] ON [' + s3.name + '].[' + s1.name + '] REBUILD WITH(DATA_COMPRESSION = PAGE, ONLINE = ON, SORT_IN_TEMPDB = ON, MAXDOP = 0); '
+                        END AS CMDLine
+                FROM    BaseRank B
+                        INNER JOIN sys.tables s1
+                            ON B.object_id = s1.object_id
+                        INNER JOIN sys.indexes s2
+                            ON s1.object_id = s2.object_id
+                        INNER JOIN sys.schemas s3
+                            ON s1.schema_id = s3.schema_id
+                WHERE    s2.type BETWEEN 0 AND 2
+                UNION ALL
+                SELECT    30 AS BaseRank,
+                        0 AS InnerRank,
+                        0 AS IndexRank,
+                        'DBCC SHRINKDATABASE(N''' + DB_NAME() + ''');' AS CMDLine
+                UNION ALL
+                SELECT    40 AS BaseRank,
+                        B.RowRank AS InnerRank,
+                        0 AS IndexRank,
+                        --'ALTER INDEX [' + s2.name + '] ON [' + s3.name + '].[' + s1.name + '] REBUILD WITH(DATA_COMPRESSION = PAGE, ONLINE = ON, SORT_IN_TEMPDB = ON, MAXDOP = 0); ' AS CMDLine
+                        'ALTER INDEX [' + s2.name + '] ON [' + s3.name + '].[' + s1.name + '] REORGANIZE WITH ( LOB_COMPACTION = ON );' AS ReIndex
+                FROM    BaseRank B
+                        INNER JOIN sys.tables s1
+                            ON B.object_id = s1.object_id
+                        INNER JOIN sys.indexes s2
+                            ON s1.object_id = s2.object_id
+                        INNER JOIN sys.schemas s3
+                            ON s1.schema_id = s3.schema_id
+                WHERE    s2.type BETWEEN 1 AND 2
+            ) RES
+)
+SELECT    REPLACE(REPLACE(CMDLine, '[[', '['),']]',']') AS CMDLine
+FROM    CMDLineWork
+--WHERE    BaseRank <= 20
+ORDER BY BaseRank, InnerRank, IndexRank

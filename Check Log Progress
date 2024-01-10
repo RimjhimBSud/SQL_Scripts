@@ -1,0 +1,12 @@
+By executing a CHECKPOINT, we get a clean starting point. Then we can check the log records before and after the TRUNCATE TABLE.
+
+USE demo;
+CHECKPOINT;
+ 
+  SELECT COUNT(*) [StartingLogRowCount]
+  FROM sys.fn_dblog (NULL, NULL);
+ 
+  TRUNCATE TABLE [dbo].[Test];
+ 
+  SELECT COUNT(*) [LogRowCountAfterTruncate]
+  FROM sys.fn_dblog (NULL, NULL);

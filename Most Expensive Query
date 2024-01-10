@@ -1,0 +1,29 @@
+--Most wxpensive query
+
+select 
+	TOP 50 SUBSTRING(qt.text,(qs.statement_start_offset/2)+1,
+	((CASE qs.statement_end_offset
+	when -1 Then DATALENGTH(qt.TEXT)
+	ELSE qs.statement_end_Offset
+	END - qs.statement_start_offset)/2)+1),
+	qs.execution_count,
+	qs.total_logical_reads,
+	qs.last_logical_reads,
+	qs.total_logical_writes,
+	qs.last_logical_writes,
+	qs.total_worker_time,
+	qs.last_worker_time,
+	qs.total_elapsed_time/1000000 Total_elapsed_Time_In_S,
+	qs.last_elapsed_time/1000000 Last_Elapsed_Time_In_S,
+	qs.last_execution_time,
+	qp.query_plan
+
+from
+sys.dm_exec_query_stats qs
+	CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) qt
+	CROSS APPLY sys.dm_exec_query_plan(qs.plan_handle) qp
+
+Order by 
+	qs.total_logical_reads desc -- logical reads
+	--qs.total_logical_writes desc -- logical writes
+	--qs.total_worker_time desc -- CPU Time

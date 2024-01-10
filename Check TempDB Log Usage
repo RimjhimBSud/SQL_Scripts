@@ -1,0 +1,67 @@
+USE [DBA]
+GO
+
+/****** Object:  StoredProcedure [dbo].[usp_TempLogWarning]    Script Date: 06/11/2023 10:26:07 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE PROCEDURE [dbo].[usp_TempLogWarning](@GByteThreshold	INT, @EmailTo VARCHAR(100)) AS
+BEGIN
+	DECLARE @iGbyteThreshold	INT = @GByteThreshold;
+	DECLARE @sEmailTo			VARCHAR(100) = @EmailTo;
+	DECLARE @Results			TABLE
+		(
+			spid		SMALLINT NOT NULL PRIMARY KEY CLUSTERED,
+			the_status	VARCHAR(30) NOT NULL,
+			loginname	VARCHAR(128) NOT NULL,
+			cmd			VARCHAR(26) NOT NULL,
+			program		VARCHAR(128) NOT NULL,
+			GBytesUsed	DECIMAL(19,4) NOT NULL
+		);
+
+	INSERT INTO @Results(spid, the_status, loginname, cmd, program,GBytesUsed)
+	SELECT	sp.spid,
+			CAST(TRIM(sp.[status]) AS VARCHAR(30)),
+			CAST(TRIM(sp.loginame) AS VARCHAR(128)),
+			CAST(TRIM(sp.cmd) AS VARCHAR(26)),
+			CAST(TRIM(sp.[program_name]) AS VARCHAR(128)),
+			CAST(r.database_transaction_log_bytes_used AS DECIMAL(19,4)) / 1073741824 AS GBytesUsed
+	FROM	tempdb.sys.dm_tran_database_transactions r
+			INNER JOIN tempdb.sys.dm_tran_session_transactions t
+				ON r.transaction_id = t.transaction_id
+			INNER JOIN master.dbo.sysprocesses sp
+				ON t.session_id = sp.spid
+			INNER JOIN master.dbo.sysdatabases sd
+				ON sp.dbid = sd.dbid
+	WHERE	r.database_id = 2
+		AND r.database_transaction_log_record_count > 0
+		AND LEN(sp.loginame) > 0
+		AND (CAST(r.database_transaction_log_bytes_used AS DECIMAL(19,4)) / 1073741824) >= 50;
+
+	IF EXISTS(SELECT * FROM @Results)
+	BEGIN
+		DECLARE @sEmailSubject	VARCHAR(100);
+		DECLARE @sEmailBody		VARCHAR(MAX);
+
+		SET @sEmailSubject = @@SERVERNAME + ' ' + 'TempDB Log Warning';
+		SET @sEmailBody = '<p>Warning, the following transaction(s) are over ' + CAST(@iGbyteThreshold AS varchar(10)) + ' GBytes:</p>';
+		SET @sEmailBody += '<table border = 1 style="font-family:Calibri">'
+		SET @sEmailBody += '<th> Spid </th> <th> Status </th> <th> Login Name </th> <th> CMD </th> <th> Program </th> <th> Gbytes Used </th>';
+		SET @sEmailBody += CAST((SELECT CAST(spid AS varchar(10)) AS td,'',the_status AS td,'',loginname AS td,'',cmd AS td,'',program AS td,'',CAST(GBytesUsed AS VARCHAR(50)) AS td FROM @Results ORDER BY spid FOR XML PATH('tr'), ELEMENTS) AS VARCHAR(MAX));
+		SET @sEmailBody += '</table>'
+		SET @sEmailBody += '<p>Kind regards,</p>';
+		SET @sEmailBody += '<p>' + @@SERVERNAME + '</p>';
+		SET @sEmailBody += '<p>Job [(3) DBA - Check TempDB Log] </p>';
+
+		SELECT @sEmailBody
+
+		EXEC msdb.dbo.sp_send_dbmail	@recipients = @sEmailTo,
+								@subject = @sEmailSubject,
+								@body = @sEmailBody,
+								@body_format = 'HTML';
+	END
+END
+GO

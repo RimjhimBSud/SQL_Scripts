@@ -1,0 +1,5 @@
+xp_logininfo 'AD Group Name','members'
+
+e.g
+
+xp_logininfo 'vanquisbankzDatabase administartor','members'

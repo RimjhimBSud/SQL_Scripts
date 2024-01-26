@@ -1,0 +1,90 @@
+Troubleshooting Performance issues:
+
+--Total and Available Memory:
+--This query provides information about the total physical memory and available physical memory on the server.
+
+
+SELECT
+    total_physical_memory_kb / 1024.0 AS TotalMemoryGB,
+    available_physical_memory_kb / 1024.0 AS AvailableMemoryGB
+FROM
+    sys.dm_os_sys_memory
+WITH (NOLOCK);
+
+
+--Memory Usage by SQL Server:
+--This query shows how much memory SQL Server is currently using and the amount of available memory in the paging file.
+
+SELECT
+    (total_page_file_kb - available_page_file_kb) / 1024.0 AS UsedMemoryGB,
+    available_page_file_kb / 1024.0 AS AvailableMemoryGB
+FROM
+    sys.dm_os_sys_memory
+WITH (NOLOCK);
+
+
+--Buffer Pool Usage:
+--This query provides information about the number of pages in the buffer pool and the size of the buffer pool.
+
+SELECT
+    COUNT(*) AS NumberOfBuffers,
+    COUNT(*) * 8 / 1024.0 AS BufferPoolSizeMB
+FROM
+    sys.dm_os_buffer_descriptors
+WITH (NOLOCK);
+
+
+--Memory Clerk Usage:
+--This query shows memory usage by different memory clerks, helping you identify areas of memory consumption.
+
+SELECT
+    type,
+    SUM(single_pages_kb + multi_pages_kb) / 1024.0 AS MemoryUsedMB
+FROM
+    sys.dm_os_memory_clerks
+GROUP BY
+    type
+ORDER BY
+    MemoryUsedMB DESC;
+
+--Memory Grants Pending:
+--This query indicates the number of queries waiting for memory grants, which could suggest memory pressure.
+
+
+SELECT
+    st.text AS QueryText,
+    r.session_id,
+    r.request_id,
+    r.wait_type,
+    r.wait_resource
+FROM
+    sys.dm_exec_requests r
+CROSS APPLY sys.dm_exec_sql_text(r.plan_handle) st
+WHERE
+    r.wait_type LIKE 'RESOURCE_SEMAPHORE';
+
+
+
+
+-- This query not only looks for queries waiting for memory grants (RESOURCE_SEMAPHORE) but also includes other common wait types related to resource contention.
+
+SELECT
+    st.text AS QueryText,
+    r.session_id,
+    r.request_id,
+    r.wait_type,
+    r.wait_resource,
+    r.total_elapsed_time,
+    r.cpu_time,
+    r.logical_reads,
+    r.reads,
+    r.writes
+FROM
+    sys.dm_exec_requests r
+CROSS APPLY sys.dm_exec_sql_text(r.plan_handle) st
+WHERE
+    r.wait_type LIKE 'RESOURCE_SEMAPHORE'
+    OR r.wait_type LIKE 'RESOURCE_GOVERNOR_IDLE'
+    OR r.wait_type LIKE 'RESOURCE_QUEUE'
+ORDER BY
+    r.total_elapsed_time DESC;

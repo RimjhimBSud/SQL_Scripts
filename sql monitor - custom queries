@@ -1,0 +1,12 @@
+--check PLE  and return 1 or 0
+
+SELECT 
+  CASE 
+    WHEN cntr_value > 300 THEN 1
+    ELSE 0
+  END AS Result
+FROM 
+  sys.dm_os_performance_counters
+WHERE 
+  [counter_name] = 'Page life expectancy'
+  AND object_name = 'MSSQL$DW:Buffer Manager';

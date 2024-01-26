@@ -1,0 +1,60 @@
+--check CPU usage
+SELECT
+    object_name,
+    MAX(cntr_value) AS max_cpu_percent
+FROM
+    sys.dm_os_performance_counters
+WHERE
+    counter_name = 'CPU usage % base'
+    AND object_name LIKE '%Resource Pool Stats%'
+GROUP BY
+    object_name
+ORDER BY
+    max_cpu_percent DESC;
+
+
+
+
+--check Memory Usage
+
+	SELECT
+    physical_memory_in_use_kb / 1024.0 AS MemoryUsedMB
+	FROM
+    sys.dm_os_process_memory;
+
+
+--check disk usage
+
+	EXEC xp_fixeddrives;
+
+
+--Check for Blocked Processes:
+
+SELECT
+    session_id,
+    blocking_session_id,
+    wait_type,
+    wait_time,
+    wait_resource,
+    text
+FROM
+    sys.dm_exec_requests
+    CROSS APPLY sys.dm_exec_sql_text(sql_handle);
+
+
+--Check for Long-Running Queries:
+SELECT
+    s.text,
+    r.session_id,
+    r.status,
+    r.blocking_session_id,
+    r.wait_type,
+    r.wait_time,
+    r.wait_resource
+FROM
+    sys.dm_exec_requests r
+CROSS APPLY sys.dm_exec_sql_text(sql_handle) AS s
+WHERE
+    r.status = 'running'
+    AND r.cpu_time > 5000; -- You can adjust the threshold as needed.
+

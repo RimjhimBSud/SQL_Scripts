@@ -1,3 +1,13 @@
+Method 1 - Check registery Editor for the following:
+
+Click Computer > HKEY_LOCAL_MACHINE > SYSTEM > CurrentControlSet > Control > SecurityProviders > SCHANNEL > Protocols > TLS 1.0.
+
+
+
+Method 2;
+
+
+
 Copy and paste the below code into Notepad. 
 Give it the name Get-TLS.ps1 
 and place it in the C:\scripts\ folder.

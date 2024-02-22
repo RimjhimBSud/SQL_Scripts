@@ -1,0 +1,28 @@
+Below is a T-SQL query that selects all columns of type datetime from all tables in a database where the data contains null values. This query minimizes overhead by querying system tables directly:
+
+sql
+Copy code
+DECLARE @DatabaseName NVARCHAR(255)
+SET @DatabaseName = 'YourDatabaseName'
+
+DECLARE @SQLQuery NVARCHAR(MAX)
+SET @SQLQuery = ''
+
+SELECT @SQLQuery = @SQLQuery +
+    'SELECT ''' + t.name + '.' + c.name + ''' AS [TableColumn], COUNT(*) AS [NullCount] ' +
+    'FROM ' + QUOTENAME(s.name) + '.' + QUOTENAME(t.name) + ' ' +
+    'WHERE [' + c.name + '] IS NULL ' +
+    'UNION ALL '
+FROM sys.columns c
+JOIN sys.tables t ON c.object_id = t.object_id
+JOIN sys.schemas s ON t.schema_id = s.schema_id
+JOIN sys.types ty ON c.system_type_id = ty.system_type_id
+WHERE ty.name = 'datetime'
+  AND t.type = 'U'
+
+SET @SQLQuery = LEFT(@SQLQuery, LEN(@SQLQuery) - LEN('UNION ALL '))
+
+EXEC sp_executesql @SQLQuery
+Replace 'YourDatabaseName' with the name of your database.
+
+This script dynamically generates and executes SQL queries to count the number of null values in each datetime column of every table in the specified database. It avoids directly querying the data itself and instead uses system tables to minimize overhead.

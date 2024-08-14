@@ -1,0 +1,60 @@
+--Missing Indexes 
+
+
+SELECT 
+    migs.avg_total_user_cost * (migs.avg_user_impact / 100.0) * (migs.user_seeks + migs.user_scans) AS [Estimated Improvement],
+    mid.[statement] AS [Table],
+    mid.equality_columns AS [EqualityColumns],
+    mid.inequality_columns AS [InequalityColumns],
+    mid.included_columns AS [IncludedColumns],
+    migs.user_seeks AS [UserSeeks],
+    migs.user_scans AS [UserScans],
+    migs.avg_total_user_cost AS [AvgTotalUserCost],
+    migs.avg_user_impact AS [AvgUserImpact],
+    'CREATE INDEX IX_' + REPLACE(REPLACE(mid.[statement], '[', ''), ']', '') 
+    + '_' + REPLACE(ISNULL(mid.equality_columns,''), ',', '_') 
+    + CASE WHEN mid.equality_columns IS NOT NULL AND mid.inequality_columns IS NOT NULL THEN '_' ELSE '' END 
+    + REPLACE(ISNULL(mid.inequality_columns, ''), ',', '_') 
+    + ' ON ' + mid.[statement] 
+    + ' (' + ISNULL(mid.equality_columns,'') 
+    + CASE WHEN mid.equality_columns IS NOT NULL AND mid.inequality_columns IS NOT NULL THEN ',' ELSE '' END 
+    + ISNULL(mid.inequality_columns, '') 
+    + ')' 
+    + ISNULL(' INCLUDE (' + mid.included_columns + ')', '') AS [CreateIndexStatement]
+FROM 
+    sys.dm_db_missing_index_group_stats AS migs
+    INNER JOIN sys.dm_db_missing_index_groups AS mig 
+        ON migs.group_handle = mig.index_group_handle
+    INNER JOIN sys.dm_db_missing_index_details AS mid 
+        ON mig.index_handle = mid.index_handle
+WHERE 
+    migs.avg_total_user_cost * (migs.avg_user_impact / 100.0) * (migs.user_seeks + migs.user_scans) > 10
+ORDER BY 
+    [Estimated Improvement] DESC;
+
+
+/*
+Explanation:
+Estimated Improvement: This column provides a metric that estimates the potential performance improvement if the index were created. It is calculated based on the average cost of queries that could benefit from the index, the impact of the index, and the frequency of seeks and scans.
+
+Table: The table for which the missing index has been suggested.
+
+EqualityColumns: Columns that are part of equality predicates (e.g., WHERE Column = Value).
+
+InequalityColumns: Columns that are part of inequality predicates (e.g., WHERE Column > Value).
+
+IncludedColumns: Columns that should be included in the index, but not as key columns. These are typically used to cover queries.
+
+UserSeeks and UserScans: These columns show the number of seeks and scans that could potentially benefit from the missing index.
+
+AvgTotalUserCost: The average cost of the queries that could benefit from the missing index.
+
+AvgUserImpact: The estimated impact of the missing index on query performance, expressed as a percentage.
+
+CreateIndexStatement: A suggested CREATE INDEX statement that you could use to create the missing index.
+
+Usage:
+Execution: Run this script in SQL Server Management Studio (SSMS) on the database you want to analyze.
+Filter Criteria: The WHERE clause filters out indexes with an estimated improvement below 10. You can adjust this threshold to show more or fewer suggestions.
+Review: Carefully review the suggested indexes before applying them. Creating too many indexes can negatively impact insert, update, and delete operations, as well as increase storage requirements.
+*/

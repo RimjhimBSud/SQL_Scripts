@@ -1,0 +1,38 @@
+--Replace 'yourusername' with the user name, this script will give access for the user to all the databases and their role membership 
+
+DECLARE @UserName NVARCHAR(128) = 'YourUserName';
+DECLARE @SQL NVARCHAR(MAX);
+
+SET @SQL = '';
+
+SELECT @SQL = @SQL + '
+IF EXISTS (SELECT 1 FROM [' + name + '].sys.database_principals WHERE name = ''' + @UserName + ''')
+BEGIN
+    INSERT INTO #UserRoles (DatabaseName, UserName, RoleMembership)
+    SELECT 
+        ''' + name + ''' AS DatabaseName, 
+        dp.name AS UserName, 
+        dr.name AS RoleMembership
+    FROM sys.database_principals dp
+    JOIN sys.database_role_members drm ON dp.principal_id = drm.member_principal_id
+    JOIN sys.database_principals dr ON drm.role_principal_id = dr.principal_id
+    WHERE dp.name = ''' + @UserName + ''';
+END;
+'
+FROM sys.databases;
+
+-- Create a temporary table to store the results
+CREATE TABLE #UserRoles (
+    DatabaseName NVARCHAR(128),
+    UserName NVARCHAR(128),
+    RoleMembership NVARCHAR(128)
+);
+
+-- Execute the dynamically constructed SQL
+EXEC sp_executesql @SQL;
+
+-- Select the results from the temporary table
+SELECT * FROM #UserRoles;
+
+-- Drop the temporary table
+DROP TABLE #UserRoles;

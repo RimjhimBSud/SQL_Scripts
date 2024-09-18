@@ -1,0 +1,67 @@
+
+/*
+
+Explanation:
+sys.indexes: This view gives information about all indexes in the database.
+sys.dm_db_index_usage_stats: This dynamic management view tracks usage statistics for each index (seeks, scans, lookups, and updates).
+The script joins these views and filters out:
+Primary key indexes (i.is_primary_key = 0),
+Unique indexes (i.is_unique = 0),
+Disabled indexes (i.is_disabled = 0),
+Tables without a clustered index (heaps).
+It then checks if the index has had no seeks, scans, or lookups by filtering for indexes where these metrics are 0.
+
+Notes:
+
+The information in sys.dm_db_index_usage_stats is reset when the SQL Server restarts, so make sure you're working with enough uptime to have reliable statistics.
+Double-check before dropping: Just because an index hasn't been used recently doesn't mean it isn't useful. Some indexes may be used infrequently but are critical for specific queries or reports.
+
+*/
+
+WITH UnusedIndexes AS (
+    SELECT 
+        i.name AS IndexName,
+        OBJECT_NAME(i.object_id) AS TableName,
+        s.name AS SchemaName,
+        i.index_id,
+        i.object_id,
+        i.type_desc AS IndexType,
+        u.user_seeks,
+        u.user_scans,
+        u.user_lookups,
+        u.user_updates
+    FROM 
+        sys.indexes i
+    LEFT JOIN 
+        sys.dm_db_index_usage_stats u 
+        ON i.object_id = u.object_id 
+        AND i.index_id = u.index_id 
+        AND u.database_id = DB_ID()
+    JOIN 
+        sys.schemas s
+        ON s.schema_id = OBJECT_SCHEMA_ID(i.object_id)
+    WHERE 
+        i.is_primary_key = 0       -- Exclude primary key indexes
+        AND i.is_unique = 0        -- Exclude unique indexes
+        AND i.is_disabled = 0      -- Exclude disabled indexes
+        AND i.type_desc <> 'HEAP'  -- Exclude heap (tables without a clustered index)
+)
+SELECT
+    SchemaName,
+    TableName,
+    IndexName,
+    IndexType,
+    COALESCE(user_seeks, 0) AS Seeks,
+    COALESCE(user_scans, 0) AS Scans,
+    COALESCE(user_lookups, 0) AS Lookups,
+    COALESCE(user_updates, 0) AS Updates
+FROM 
+    UnusedIndexes
+WHERE 
+    COALESCE(user_seeks, 0) = 0
+    AND COALESCE(user_scans, 0) = 0
+    AND COALESCE(user_lookups, 0) = 0
+ORDER BY 
+    TableName, IndexName;
+
+

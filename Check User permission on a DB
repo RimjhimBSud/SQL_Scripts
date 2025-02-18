@@ -1,0 +1,40 @@
+DECLARE @UserName SYSNAME = 'CHCAD\SDH_ADF_Test'; -- Change this to the username you want to check
+
+-- Check if the user exists in the database
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = @UserName)
+BEGIN
+    PRINT 'User does not exist in this database.';
+    RETURN;
+END
+
+-- Get permissions as a comma-separated string
+DECLARE @PermissionState NVARCHAR(MAX);
+SELECT @PermissionState = 
+    STUFF((
+        SELECT DISTINCT ', ' + perm.state_desc
+        FROM sys.database_permissions perm
+        JOIN sys.database_principals dp ON perm.grantee_principal_id = dp.principal_id
+        WHERE dp.name = @UserName
+        FOR XML PATH('')), 1, 2, '')
+
+-- Get roles as a comma-separated string
+DECLARE @RoleMembership NVARCHAR(MAX);
+SELECT @RoleMembership = 
+    STUFF((
+        SELECT DISTINCT ', ' + role.name
+        FROM sys.database_role_members rm
+        JOIN sys.database_principals role ON rm.role_principal_id = role.principal_id
+        JOIN sys.database_principals dp ON rm.member_principal_id = dp.principal_id
+        WHERE dp.name = @UserName
+        FOR XML PATH('')), 1, 2, '')
+
+-- Select final result
+SELECT 
+    dp.name AS UserName,
+    DB_NAME() AS DatabaseName,
+    sp.name AS MappedLoginName,
+    COALESCE(@PermissionState, 'No Explicit Permissions') AS PermissionState,
+    COALESCE(@RoleMembership, 'No Role Membership') AS RoleMembership
+FROM sys.database_principals dp
+LEFT JOIN sys.server_principals sp ON dp.sid = sp.sid
+WHERE dp.name = @UserName;
